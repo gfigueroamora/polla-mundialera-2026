@@ -120,9 +120,9 @@ const COMPANY_EMOJIS = ["🏢","🚛","🛒","🏭","🏪","🏦","🍕","⚽","
 const COMPANY_COLORS = ["#3b82f6","#16a34a","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#ec4899","#64748b"];
 const REACTIONS = ["🔥","😂","😭","👏","🤯","💪","😤","🎯"];
 const INITIAL_COMPANIES = [
-  {id:"c1",name:"Amigos",code:"AMIGOS",pin:"1111",color:"#3b82f6",emoji:"👥",players:[],allowedNames:[]},
-  {id:"c2",name:"Transportes Figueroa",code:"FIGUEROA",pin:"2222",color:"#f59e0b",emoji:"🚛",players:[],allowedNames:[]},
-  {id:"c3",name:"Comercial Khatar",code:"KHATAR",pin:"3333",color:"#16a34a",emoji:"🛒",players:[],allowedNames:[]},
+  {id:"c1",name:"Amigos",code:"AMIGOS",pin:"1111",color:"#3b82f6",emoji:"👥",players:[],allowedNames:[],betAmount:10000},
+  {id:"c2",name:"Transportes Figueroa",code:"FIGUEROA",pin:"2222",color:"#f59e0b",emoji:"🚛",players:[],allowedNames:[],betAmount:10000},
+  {id:"c3",name:"Comercial Khatar",code:"KHATAR",pin:"3333",color:"#16a34a",emoji:"🛒",players:[],allowedNames:[],betAmount:10000},
 ];
 
 // ── TIEMPO ────────────────────────────────────────────────────────────────────
@@ -439,6 +439,7 @@ export default function App(){
   const [newCompPin,setNewCompPin]=useState("");
   const [newCompEmoji,setNewCompEmoji]=useState("🏢");
   const [newCompColor,setNewCompColor]=useState("#3b82f6");
+  const [newCompBet,setNewCompBet]=useState("10000");
   const [newAllowedName,setNewAllowedName]=useState("");
   const [selectedCompanyId,setSelectedCompanyId]=useState("");
   const [resetPlayerPin,setResetPlayerPin]=useState("");
@@ -481,7 +482,8 @@ export default function App(){
 
   const allMatches=useMemo(()=>[...matches,...koMatches],[matches,koMatches]);
   const compPlayers=currentCompany?.players||[];
-  const pot=compPlayers.length*BET;
+  const compBet = currentCompany?.betAmount || 10000;
+  const pot=compPlayers.length*compBet;
 
   function showAdminMsg(msg){setAdminMsg(msg);setTimeout(()=>setAdminMsg(""),3000);}
 
@@ -618,7 +620,7 @@ export default function App(){
         <div style={{fontSize:36,marginBottom:4}}>{currentCompany.emoji}</div>
         <div style={{fontWeight:900,fontSize:20,color:"#fff"}}>{currentCompany.name}</div>
         <div style={{fontSize:12,color:"rgba(255,255,255,0.75)",marginTop:2}}>
-          {compPlayers.length} jugador{compPlayers.length!==1?"es":""} · Pozo {fmtCLP(compPlayers.length*BET)}
+          {compPlayers.length} jugador{compPlayers.length!==1?"es":""} · Pozo {fmtCLP(compPlayers.length*(currentCompany?.betAmount||10000))}
         </div>
       </div>
       <div style={{background:"#1e293b",borderRadius:16,padding:24,width:"100%",maxWidth:340,border:"1px solid #334155"}}>
@@ -764,6 +766,7 @@ export default function App(){
                 const id=adminMatchId.trim();
                 if(!id||adminH===""||adminA===""){showAdminMsg("❌ Completa todos los campos");return;}
                 const m=allMatches.find(x=>x.id===id);
+                if(m?.status==="finished"&&!window.confirm(`⚠️ Este partido ya está finalizado.\n¿Seguro que quieres modificar el resultado de ${m.home} vs ${m.away}?\n\nEsto recalculará los puntos de todos.`)) return;
                 const updatedM=matches.map(x=>x.id===id?{...x,homeScore:parseInt(adminH),awayScore:parseInt(adminA),status:adminMatchStatus}:x);
                 const updatedKO=koMatches.map(x=>x.id===id?{...x,homeScore:parseInt(adminH),awayScore:parseInt(adminA),status:adminMatchStatus}:x);
                 await persist({matches:updatedM,koMatches:updatedKO});
@@ -783,7 +786,7 @@ export default function App(){
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:top.length?6:0}}>
                         <span style={{fontSize:18}}>{c.emoji}</span>
                         <span style={{fontWeight:700,color:"#f1f5f9",flex:1}}>{c.name}</span>
-                        <span style={{fontSize:12,color:"#64748b"}}>{c.players.length} jug. · {fmtCLP(c.players.length*BET)}</span>
+                        <span style={{fontSize:12,color:"#64748b"}}>{c.players.length} jug. · {fmtCLP(c.players.length*(c.betAmount||10000))}</span>
                       </div>
                       {top.map(({p,s},i)=>(
                         <div key={p.id} style={{display:"flex",alignItems:"center",gap:6,padding:"3px 0"}}>
@@ -911,16 +914,11 @@ export default function App(){
                     <button key={e} onClick={()=>setNewCompEmoji(e)} style={{fontSize:20,background:newCompEmoji===e?"#334155":"#0f172a",border:newCompEmoji===e?"2px solid #60a5fa":"1px solid #475569",borderRadius:8,padding:"4px 8px",cursor:"pointer"}}>{e}</button>
                   ))}
                 </div>
-                <label style={{color:"#94a3b8",fontSize:12,fontWeight:600,display:"block",marginBottom:6}}>COLOR</label>
-                <div style={{display:"flex",gap:8,marginBottom:14}}>
-                  {COMPANY_COLORS.map(c=>(
-                    <button key={c} onClick={()=>setNewCompColor(c)} style={{width:32,height:32,borderRadius:8,background:c,border:"none",cursor:"pointer",outline:newCompColor===c?"3px solid #fff":"none"}}/>
-                  ))}
-                </div>
+
                 <button onClick={async()=>{
                   if(!newCompName.trim()||!newCompCode.trim()||newCompPin.length!==4){showAdminMsg("❌ Completa todos los campos");return;}
                   if(companies.find(c=>c.code.toUpperCase()===newCompCode.toUpperCase())){showAdminMsg("❌ Ese código ya existe");return;}
-                  const newC={id:"c"+Date.now(),name:newCompName.trim(),code:newCompCode.trim(),pin:newCompPin,color:newCompColor,emoji:newCompEmoji,players:[],allowedNames:[]};
+                  const newC={id:"c"+Date.now(),name:newCompName.trim(),code:newCompCode.trim(),pin:newCompPin,color:newCompColor,emoji:newCompEmoji,players:[],allowedNames:[],betAmount:parseInt(newCompBet)||10000};
                   await persist({companies:[...companies,newC]});
                   setNewCompName("");setNewCompCode("");setNewCompPin("");
                   showAdminMsg("✅ Empresa creada: "+newCompName);
@@ -935,7 +933,7 @@ export default function App(){
                     <div style={{flex:1}}>
                       <div style={{fontWeight:700,color:"#f1f5f9",fontSize:14}}>{c.name}</div>
                       <div style={{fontSize:11,color:"#64748b"}}>
-                        <b style={{color:"#94a3b8",letterSpacing:1}}>{c.code}</b> · {c.players.length} jugadores · {fmtCLP(c.players.length*BET)}
+                        <b style={{color:"#94a3b8",letterSpacing:1}}>{c.code}</b> · {c.players.length} jugadores · {fmtCLP(c.players.length*(c.betAmount||10000))}
                       </div>
                     </div>
                   </div>
@@ -1099,7 +1097,7 @@ export default function App(){
               borderRadius:14,padding:"14px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontWeight:900,fontSize:22,color:"#fff"}}>{fmtCLP(pot)}</div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>{compPlayers.length} jugadores × {fmtCLP(BET)}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.75)"}}>{compPlayers.length} jugadores × {fmtCLP(compBet)}</div>
                 {actualChampion&&<div style={{fontSize:11,color:"rgba(255,255,255,0.85)",marginTop:2}}>🏆 Campeón: {actualChampion}</div>}
               </div>
               <div style={{textAlign:"right"}}>
