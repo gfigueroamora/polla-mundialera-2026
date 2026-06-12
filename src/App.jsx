@@ -712,7 +712,7 @@ export default function App(){
             style={{background:"#6d28d9",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Salir</button>
         </div>
         <div style={{display:"flex",background:"#1e1b4b",borderBottom:"1px solid #4c1d95",overflowX:"auto"}}>
-          {[{id:"results",l:"Resultados",i:"📋"},{id:"ko",l:"Eliminat.",i:"⚔️"},{id:"champion",l:"Campeón",i:"🏆"},{id:"companies",l:"Empresas",i:"🏢"},{id:"players",l:"Jugadores",i:"👤"}].map(s=>(
+          {[{id:"results",l:"Resultados",i:"📋"},{id:"ko",l:"Eliminat.",i:"⚔️"},{id:"champion",l:"Campeón",i:"🏆"},{id:"companies",l:"Empresas",i:"🏢"},{id:"players",l:"Jugadores",i:"👤"},{id:"export",l:"Exportar",i:"📊"}].map(s=>(
             <button key={s.id} onClick={()=>setAdminSection(s.id)} style={{
               flexShrink:0,padding:"9px 12px",border:"none",background:"transparent",
               borderBottom:adminSection===s.id?"2px solid #a78bfa":"2px solid transparent",
@@ -936,6 +936,13 @@ export default function App(){
                         <b style={{color:"#94a3b8",letterSpacing:1}}>{c.code}</b> · {c.players.length} jugadores · {fmtCLP(c.players.length*(c.betAmount||10000))}
                       </div>
                     </div>
+                    <button onClick={async()=>{
+                      if(!window.confirm(`⚠️ ¿Eliminar "${c.name}"?\n\nSe borrarán todos sus jugadores y pronósticos.\nEsta acción no se puede deshacer.`)) return;
+                      await persist({companies:companies.filter(x=>x.id!==c.id)});
+                      showAdminMsg("✅ Empresa eliminada: "+c.name);
+                    }} style={{background:"#450a0a",color:"#f87171",border:"1px solid #dc2626",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+                      🗑️ Eliminar
+                    </button>
                   </div>
                 </div>
               ))}
@@ -1044,6 +1051,88 @@ export default function App(){
                 )}
               </div>
             </>
+          )}
+
+          {/* EXPORTAR */}
+          {adminSection==="export"&&(
+            <div style={{background:"#1e293b",borderRadius:14,padding:"16px",border:"1px solid #334155"}}>
+              <div style={{fontWeight:800,color:"#f8fafc",fontSize:14,marginBottom:4}}>📊 Exportar datos a Excel</div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:16}}>Descarga toda la información de la polla en un archivo Excel</div>
+
+              {/* Ranking general */}
+              <button onClick={()=>{
+                const rows=[["Empresa","Jugador","Avatar","Puntos","Exactos","Ganador","Fallos","% Acierto","Campeón","Bonus Campeón"]];
+                companies.forEach(c=>{
+                  c.players.forEach(p=>{
+                    const s=getStats(p,predictions,allMatches,actualChampion);
+                    rows.push([c.name,p.name,p.avatar,s.total,s.exact,s.winner,s.miss,s.pct+"%",p.champion||"—",s.champBonus]);
+                  });
+                });
+                const csv=rows.map(r=>r.join(",")).join("\n");
+                const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement("a");
+                a.href=url;a.download="ranking_polla_2026.csv";a.click();
+                URL.revokeObjectURL(url);
+              }} style={{width:"100%",background:"#16a34a",color:"#fff",border:"none",borderRadius:10,
+                padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",marginBottom:10}}>
+                🥇 Descargar Ranking General
+              </button>
+
+              {/* Pronósticos */}
+              <button onClick={()=>{
+                const rows=[["Empresa","Jugador","Partido","Equipo Local","Equipo Visita","Pronóstico Local","Pronóstico Visita","Resultado Real","Puntos"]];
+                allMatches.filter(m=>m.status==="finished").forEach(m=>{
+                  companies.forEach(c=>{
+                    c.players.forEach(p=>{
+                      const pred=predictions[p.id]?.[m.id];
+                      const pts=pred?calcPts(pred,m):null;
+                      rows.push([
+                        c.name,p.name,
+                        `${m.home} vs ${m.away}`,
+                        m.home,m.away,
+                        pred?pred.home:"—",pred?pred.away:"—",
+                        `${m.homeScore}-${m.awayScore}`,
+                        pts!==null?pts:"Sin pronóstico"
+                      ]);
+                    });
+                  });
+                });
+                const csv=rows.map(r=>r.join(",")).join("\n");
+                const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement("a");
+                a.href=url;a.download="pronosticos_polla_2026.csv";a.click();
+                URL.revokeObjectURL(url);
+              }} style={{width:"100%",background:"#0369a1",color:"#fff",border:"none",borderRadius:10,
+                padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",marginBottom:10}}>
+                ⚽ Descargar Pronósticos
+              </button>
+
+              {/* Empresas */}
+              <button onClick={()=>{
+                const rows=[["Empresa","Código","Jugadores","Cuota","Pozo Total","Líder","Puntos Líder"]];
+                companies.forEach(c=>{
+                  const bet=c.betAmount||10000;
+                  const ranking=c.players.map(p=>({p,s:getStats(p,predictions,allMatches,actualChampion)})).sort((a,b)=>b.s.total-a.s.total);
+                  const lider=ranking[0];
+                  rows.push([c.name,c.code,c.players.length,fmtCLP(bet),fmtCLP(c.players.length*bet),lider?lider.p.name:"—",lider?lider.s.total:"—"]);
+                });
+                const csv=rows.map(r=>r.join(",")).join("\n");
+                const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement("a");
+                a.href=url;a.download="empresas_polla_2026.csv";a.click();
+                URL.revokeObjectURL(url);
+              }} style={{width:"100%",background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,
+                padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",marginBottom:10}}>
+                🏢 Descargar Resumen Empresas
+              </button>
+
+              <div style={{background:"#0f172a",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#64748b",marginTop:4}}>
+                💡 Los archivos se descargan en formato CSV que se abre directamente en Excel o Google Sheets
+              </div>
+            </div>
           )}
         </div>
       </div>
